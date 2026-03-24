@@ -70,26 +70,23 @@ def score_guess(guess: str, answer: str) -> list[str]:
     return result
 
 
-def render_tile(letter: str, state: str) -> list[str]:
-    """Return 3 lines that form one coloured box tile."""
+def render_tile(letter: str, state: str) -> str:
+    """Return one coloured box tile."""
     colour = {
         "green":  BG_GREEN,
         "yellow": BG_YELLOW,
         "gray":   BG_GRAY,
         "empty":  BG_EMPTY,
     }[state]
-    blank = f"{colour}{' ' * BOX_W}{RESET}"
-    mid   = f"{colour}{BOLD}  {letter.upper()}  {RESET}"
-    return [blank, mid, blank]
 
+    if state == "empty":
+        return f"{colour}     {RESET}"
+
+    return f"{colour}{BOLD}  {letter.upper()}  {RESET}"
 
 def render_row(letters: list[str], states: list[str]) -> str:
-    """Merge tiles side-by-side and return a 3-line string."""
     tiles = [render_tile(l, s) for l, s in zip(letters, states)]
-    lines = []
-    for row_idx in range(3):
-        lines.append("  " + GAP.join(t[row_idx] for t in tiles))
-    return "\n".join(lines)
+    return "  " + GAP.join(tiles)
 
 
 def print_board(guesses: list[str], answer: str) -> None:
