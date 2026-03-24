@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wordle · Python Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Berkeley+Mono&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:            #0e0e0f;
+      --surface:       #161618;
+      --border:        #2a2a2e;
+      --text:          #e8e6e1;
+      --muted:         #5a5a62;
+      --green:         #538d4e;
+      --green-bright:  #6aaf63;
+      --yellow:        #b59f3b;
+      --yellow-bright: #d4b84a;
+      --font-mono:     'Berkeley Mono', 'Fira Code', monospace;
+      --font-serif:    'DM Serif Display', Georgia, serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+
+    header {
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-family: var(--font-serif);
+      font-size: 1.8rem;
+      font-weight: 400;
+    }
+
+    header h1 em { font-style: italic; color: var(--green-bright); }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .panel + .panel { border-left: 1px solid var(--border); }
+
+    .panel-bar {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #ffbd2e; }
+    .dot-g { background: #28c840; }
+
+    .panel-label {
+      font-size: 11px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    /* terminal */
+    #term-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      background: var(--bg);
+    }
+
+    #output {
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    /* ANSI colours */
+    .g-bg  { background: #538d4e; color: #fff; }
+    .y-bg  { background: #b59f3b; color: #111; }
+    .gr-bg { background: #3a3a3c; color: #bbb; }
+    .dk-bg { background: #1c1c1e; color: #555; }
+    .bold  { font-weight: 700; }
+    .g-fg  { color: var(--green-bright); }
+    .y-fg  { color: var(--yellow-bright); }
+    .gr-fg { color: var(--muted); }
+
+    .err-line { color: #ff6b6b; }
+
+    /* loading */
+    #loader {
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0 12px;
+    }
+
+    .spin {
+      width: 11px; height: 11px;
+      border: 2px solid var(--border);
+      border-top-color: var(--green-bright);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* input row */
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .prompt { color: var(--green-bright); }
+
+    #guess-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      caret-color: var(--green-bright);
+    }
+    #guess-input::placeholder { color: var(--muted); text-transform: none; letter-spacing: 0; }
+    #guess-input:disabled { opacity: .4; }
+
+    #sub-btn {
+      background: var(--green);
+      color: #fff;
+      border: none;
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    #sub-btn:hover:not(:disabled) { background: var(--green-bright); }
+    #sub-btn:disabled { background: var(--muted); cursor: not-allowed; }
+
+    /* status */
+    #status-bar {
+      padding: 5px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    #s-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    #s-dot.ready { background: var(--green-bright); }
+    #s-dot.busy  { background: var(--yellow-bright); }
+    #s-dot.error { background: #ff6b6b; }
+
+    /* source */
+    #src-scroll {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+
+    #src-scroll pre {
+      margin: 0;
+      padding: 16px 20px;
+      font-size: 12px;
+      line-height: 1.65;
+      tab-size: 4;
+      white-space: pre;
+    }
+
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .st  { color: #c3e88d; }
+    .cm  { color: var(--muted); font-style: italic; }
+    .nm  { color: var(--yellow-bright); }
+
+    @media (max-width: 700px) {
+      .split { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+      .panel + .panel { border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <h1>Wordle · <em>Python</em> Edition</h1>
+    <span class="tagline">Pyodide · real Python in the browser</span>
+  </header>
+
+  <div class="split">
+
+    <!-- LEFT: terminal -->
+    <div class="panel">
+      <div class="panel-bar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span class="panel-label">terminal — wordle.py</span>
+      </div>
+
+      <div id="term-scroll">
+        <div id="loader"><div class="spin"></div>Loading Python (Pyodide ~8 MB)…</div>
+        <div id="output"></div>
+      </div>
+
+      <div id="status-bar">
+        <div id="s-dot"></div>
+        <span id="s-txt">Initialising…</span>
+      </div>
+
+      <div class="input-row">
+        <span class="prompt">›</span>
+        <input id="guess-input" type="text" maxlength="5"
+               placeholder="5-letter word…" autocomplete="off"
+               spellcheck="false" disabled>
+        <button id="sub-btn" disabled>Enter</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: source -->
+    <div class="panel">
+      <div class="panel-bar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span class="panel-label">source — wordle.py</span>
+      </div>
+      <div id="src-scroll"><pre id="src-code"></pre></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+<script>
+  // ── word list ────────────────────────────────────────────────────────────────
+  const WORDS = [
+    "about","above","abuse","actor","acute","admit","adopt","adult","after","again",
+    "agent","agree","ahead","alarm","album","alert","alike","alive","alley","allow",
+    "alone","along","alter","angel","anger","angle","angry","ankle","apart","apple",
+    "apply","arena","argue","arise","armor","array","aside","asset","atlas","attic",
+    "audio","audit","avoid","award","aware","baker","bases","basic","basis","batch",
+    "beach","began","begin","being","below","bench","birth","black","blade","blame",
+    "blank","blast","blaze","bleed","blend","bless","blind","block","blood","bloom",
+    "board","bonus","booth","bound","brace","brain","brand","brave","bread","break",
+    "breed","brick","bride","brief","bring","broad","broke","brown","brush","buddy",
+    "build","built","burst","buyer","cabin","candy","carry","catch","cause","chain",
+    "chair","chaos","charm","chart","chase","cheap","check","chess","chest","chief",
+    "child","chill","chord","civic","civil","claim","clash","class","clean","clear",
+    "click","cliff","climb","clock","clone","close","cloud","coast","comet","coral",
+    "could","count","court","cover","crack","craft","crane","crash","crazy","cream",
+    "creek","crime","crisp","cross","crowd","crown","cruel","crush","crust","curve",
+    "cycle","daily","dance","death","decay","delay","delta","dense","depth","devil",
+    "digit","dirty","dodge","doubt","dough","draft","drain","drama","dream","dress",
+    "drill","drink","drive","drown","drunk","eagle","earth","eight","elect","elite",
+    "empty","enemy","enjoy","enter","equal","error","essay","event","every","exact",
+    "exist","extra","fable","faith","false","fancy","fatal","fault","feast","fence",
+    "ferry","fever","fiber","field","fifth","fifty","fight","final","first","fixed",
+    "flame","flash","fleet","flesh","float","flood","floor","flour","fluid","flush",
+    "focus","force","forge","forth","forum","found","frame","fraud","fresh","front",
+    "froze","fruit","fully","funny","ghost","given","glass","globe","gloom","glory",
+    "glove","grace","grade","grain","grand","grant","graph","grasp","grass","grave",
+    "great","greed","green","grief","grind","groan","groom","gross","group","grove",
+    "grown","guard","guess","guest","guide","guilt","habit","harsh","haste","heart",
+    "heavy","hedge","herbs","hobby","honey","horse","hotel","house","human","humor",
+    "hurry","ideal","image","imply","index","inner","input","issue","ivory","jewel",
+    "joint","judge","juice","juicy","karma","knack","knife","knock","known","label",
+    "large","laser","later","laugh","layer","learn","lease","leave","legal","lemon",
+    "level","light","limit","linen","liver","lobby","local","lodge","logic","loose",
+    "lower","lucky","lunar","lyric","magic","major","maker","manor","maple","match",
+    "mayor","media","mercy","merge","merit","metal","meter","might","mimic","minor",
+    "minus","mixed","model","money","month","moral","motif","motor","mount","mouse",
+    "mouth","movie","muddy","music","naive","nasty","naval","nerve","never","night",
+    "noble","noise","north","noted","novel","nurse","ocean","offer","often","olive",
+    "opera","orbit","order","other","outer","owned","oxide","ozone","paint","panic",
+    "paper","party","pasta","patch","pause","peace","pearl","penny","phase","phone",
+    "photo","piano","pixel","pizza","place","plain","plane","plant","plate","pluck",
+    "point","polar","pound","power","press","price","pride","prime","print","prior",
+    "prize","probe","proof","prose","proud","prove","pulse","punch","pupil","purse",
+    "queen","quest","quick","quiet","quota","quote","radar","radio","rainy","rally",
+    "ranch","range","rapid","ratio","reach","react","ready","realm","rebel","refer",
+    "reign","relax","relay","reply","rider","ridge","rifle","right","rigid","risky",
+    "rival","river","rivet","robin","robot","rocky","rough","round","route","royal",
+    "rugby","ruler","rural","saint","salad","sauce","scale","scene","scope","score",
+    "scout","sense","setup","seven","shade","shake","shall","shame","shape","share",
+    "shark","sharp","shelf","shell","shift","shine","shirt","shock","short","shout",
+    "sight","silly","since","skill","skull","slate","sleep","slice","slide","slope",
+    "small","smart","smell","smile","smoke","snake","solve","sorry","south","space",
+    "spark","speak","speed","spell","spend","spill","spine","spite","split","spoke",
+    "spoon","sport","spray","squad","stack","staff","stage","stain","stair","stake",
+    "stamp","stand","stark","start","state","steal","steam","steel","steep","steer",
+    "stern","stick","stiff","still","stock","stone","stood","store","storm","story",
+    "stove","strap","stray","strip","stuck","study","style","sugar","suite","sunny",
+    "super","surge","swear","sweep","sweet","swift","swipe","sword","table","taken",
+    "taste","teach","tears","teeth","tempo","tense","tenth","thick","thing","think",
+    "third","thorn","those","three","threw","throw","thumb","tiger","tight","timer",
+    "tired","title","today","token","topic","total","touch","tough","tower","toxic",
+    "track","trade","trail","train","trait","trash","treat","trend","trial","tribe",
+    "trick","tried","troop","trout","truce","truck","truly","trunk","trust","truth",
+    "tumor","tweak","twice","twist","uncle","under","unify","union","unite","until",
+    "upper","upset","urban","usage","usual","utter","vague","valid","value","valve",
+    "vapor","vault","verse","video","vigor","viral","virus","visit","vista","vital",
+    "vivid","vocal","voice","voter","wager","waste","watch","water","weave","wedge",
+    "weird","whale","wheat","wheel","where","which","while","white","whole","whose",
+    "witch","woman","women","world","worry","worth","would","wound","wrath","write",
+    "wrong","yacht","yield","young","youth","zebra"
+  ];
+
+  // ── Python source (runs inside Pyodide; WORDS injected via globals) ──────────
+  const PY = `
+import random
+
+RESET     = "\x1b[0m"
+BOLD      = "\x1b[1m"
+BG_GREEN  = "\x1b[42m\x1b[97m"
+BG_YELLOW = "\x1b[43m\x1b[30m"
+BG_GRAY   = "\x1b[100m\x1b[97m"
+BG_EMPTY  = "\x1b[40m\x1b[90m"
+FG_GREEN  = "\x1b[92m"
+FG_YELLOW = "\x1b[93m"
+FG_GRAY   = "\x1b[90m"
+BOX_W = 5
+
+def score_guess(guess, answer):
+    result = [None] * 5
+    remaining = list(answer)
+    for i, (g, a) in enumerate(zip(guess, answer)):
+        if g == a:
+            result[i] = "green"
+            remaining[i] = None
+    for i, g in enumerate(guess):
+        if result[i]: continue
+        if g in remaining:
+            result[i] = "yellow"
+            remaining[remaining.index(g)] = None
+        else:
+            result[i] = "gray"
+    return result
+
+def render_tile(letter, state):
+    c = {"green": BG_GREEN, "yellow": BG_YELLOW,
+         "gray": BG_GRAY, "empty": BG_EMPTY}[state]
+    pad = " " * BOX_W
+    return [f"{c}{pad}{RESET}",
+            f"{c}{BOLD}  {letter.upper()}  {RESET}",
+            f"{c}{pad}{RESET}"]
+
+def render_row(letters, states):
+    tiles = [render_tile(l, s) for l, s in zip(letters, states)]
+    return "\\n".join("  " + " ".join(t[r] for t in tiles) for r in range(3))
+
+def print_board(guesses, answer):
+    print()
+    for i in range(6):
+        letters = list(guesses[i]) if i < len(guesses) else [" "] * 5
+        states  = score_guess(guesses[i], answer) if i < len(guesses) else ["empty"] * 5
+        print(render_row(letters, states))
+        print()
+
+def build_keyboard(guesses, answer):
+    rows  = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+    state = {}
+    for g in guesses:
+        for ch, s in zip(g, score_guess(g, answer)):
+            if s == "green": state[ch] = "green"
+            elif s == "yellow" and state.get(ch) != "green": state[ch] = "yellow"
+            elif ch not in state: state[ch] = "gray"
+    lines = []
+    for row in rows:
+        parts = []
+        for ch in row:
+            s = state.get(ch)
+            if   s == "green":  parts.append(f"{FG_GREEN}{BOLD}{ch.upper()}{RESET}")
+            elif s == "yellow": parts.append(f"{FG_YELLOW}{BOLD}{ch.upper()}{RESET}")
+            elif s == "gray":   parts.append(f"{FG_GRAY}{ch.upper()}{RESET}")
+            else:               parts.append(ch.upper())
+        lines.append("  " + " ".join(parts))
+    return "\\n".join(lines)
+
+# mutable game state
+answer    = random.choice(WORDS)
+guesses   = []
+game_over = False
+
+def start_game():
+    global answer, guesses, game_over
+    answer    = random.choice(WORDS)
+    guesses   = []
+    game_over = False
+    print(f"\\n{BOLD}  \\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c{RESET}")
+    print(f"  W O R D L E  \\U0001f7e9")
+    print(f"{BOLD}  \\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c\\u254c{RESET}\\n")
+    print("  \\U0001f7e9 right letter, right spot")
+    print("  \\U0001f7e8 right letter, wrong spot")
+    print("  \\u2b1b  not in word\\n")
+    print_board(guesses, answer)
+    print(build_keyboard(guesses, answer))
+    print()
+
+def submit_guess(raw):
+    global guesses, game_over
+    raw = raw.strip().lower()
+    if len(raw) != 5:
+        print("  \\u26a0  Please enter exactly 5 letters.\\n")
+        return
+    if not raw.isalpha():
+        print("  \\u26a0  Letters only.\\n")
+        return
+    if raw not in WORDS:
+        print(f"  \\u26a0  '{raw.upper()}' not in word list.\\n")
+        return
+    guesses.append(raw)
+    print_board(guesses, answer)
+    print(build_keyboard(guesses, answer))
+    print()
+    if raw == answer:
+        game_over = True
+        labels = ["Genius!", "Magnificent!", "Impressive!", "Splendid!", "Great!", "Phew!"]
+        print(f"  \\U0001f389  {labels[len(guesses)-1]}  ({len(guesses)}/6)\\n")
+        print('  Type  new  to play again.\\n')
+    elif len(guesses) >= 6:
+        game_over = True
+        print(f"  \\U0001f614  The word was {BOLD}{answer.upper()}{RESET}\\n")
+        print('  Type  new  to play again.\\n')
+`;
+
+  // ── ANSI → HTML ───────────────────────────────────────────────────────────────
+  function ansi(text) {
+    text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const rules = [
+      [/\x1b\[42m\x1b\[97m([\s\S]*?)\x1b\[0m/g,  '<span class="g-bg bold">$1</span>'],
+      [/\x1b\[43m\x1b\[30m([\s\S]*?)\x1b\[0m/g,  '<span class="y-bg bold">$1</span>'],
+      [/\x1b\[100m\x1b\[97m([\s\S]*?)\x1b\[0m/g, '<span class="gr-bg">$1</span>'],
+      [/\x1b\[40m\x1b\[90m([\s\S]*?)\x1b\[0m/g,  '<span class="dk-bg">$1</span>'],
+      [/\x1b\[92m\x1b\[1m([\s\S]*?)\x1b\[0m/g,   '<span class="g-fg bold">$1</span>'],
+      [/\x1b\[93m\x1b\[1m([\s\S]*?)\x1b\[0m/g,   '<span class="y-fg bold">$1</span>'],
+      [/\x1b\[1m([\s\S]*?)\x1b\[0m/g,             '<span class="bold">$1</span>'],
+      [/\x1b\[92m([\s\S]*?)\x1b\[0m/g,            '<span class="g-fg">$1</span>'],
+      [/\x1b\[93m([\s\S]*?)\x1b\[0m/g,            '<span class="y-fg">$1</span>'],
+      [/\x1b\[90m([\s\S]*?)\x1b\[0m/g,            '<span class="gr-fg">$1</span>'],
+      [/\x1b\[[0-9;]*m/g, ''],
+    ];
+    for (const [re, repl] of rules) text = text.replace(re, repl);
+    return text;
+  }
+
+  // ── syntax highlight ──────────────────────────────────────────────────────────
+  function highlight(code) {
+    code = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return code
+            .replace(/#[^\n]*/g, m => `<span class="cm">${m}</span>`)
+            .replace(/("""[\s\S]*?"""|"[^"\n]*"|'[^'\n]*')/g, m => `<span class="st">${m}</span>`)
+            .replace(/\b(def|return|import|from|if|elif|else|for|while|in|not|and|or|is|None|True|False|global|try|except|raise|pass|break|continue)\b/g,
+                    '<span class="kw">$1</span>')
+            .replace(/\b(print|len|list|str|int|range|zip|enumerate|sorted|random|input)\b/g,
+                    '<span class="fn">$1</span>')
+            .replace(/\b(\d+)\b/g, '<span class="nm">$1</span>');
+  }
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────────
+  const outputEl = document.getElementById('output');
+  const loaderEl = document.getElementById('loader');
+  const inputEl  = document.getElementById('guess-input');
+  const btnEl    = document.getElementById('sub-btn');
+  const sDot     = document.getElementById('s-dot');
+  const sTxt     = document.getElementById('s-txt');
+  const termEl   = document.getElementById('term-scroll');
+
+  // populate source panel immediately (no Python needed)
+  document.getElementById('src-code').innerHTML = highlight(PY);
+
+  function setStatus(cls, msg) {
+    sDot.className = cls;
+    sTxt.textContent = msg;
+  }
+
+  // buffer for partial lines from Python stdout
+  let _buf = '';
+
+  function flushBuf() {
+    if (!_buf) return;
+    const el = document.createElement('span');
+    el.innerHTML = ansi(_buf);
+    outputEl.appendChild(el);
+    _buf = '';
+    termEl.scrollTop = termEl.scrollHeight;
+  }
+
+  function printLine(text) {
+    const el = document.createElement('span');
+    el.innerHTML = ansi(text);
+    outputEl.appendChild(el);
+    termEl.scrollTop = termEl.scrollHeight;
+  }
+
+  function printErr(msg) {
+    const el = document.createElement('div');
+    el.className = 'err-line';
+    el.textContent = '⚠ ' + msg;
+    outputEl.appendChild(el);
+    termEl.scrollTop = termEl.scrollHeight;
+  }
+
+  // ── Pyodide bootstrap ─────────────────────────────────────────────────────────
+  let py = null;
+
+  async function init() {
+    setStatus('busy', 'Loading Pyodide…');
+
+    try {
+      py = await loadPyodide();
+    } catch (e) {
+      loaderEl.innerHTML = '<span class="err-line">⚠ Could not load Pyodide — are you online?</span>';
+      setStatus('error', 'Pyodide load failed');
+      console.error(e);
+      return;
+    }
+
+    // Stream stdout character-by-character, collect into lines
+    py.setStdout({
+      raw(charCode) {
+        const ch = String.fromCharCode(charCode);
+        if (ch === '\n') {
+          printLine(_buf + '\n');
+          _buf = '';
+        } else {
+          _buf += ch;
+        }
+      }
+    });
+
+    py.setStderr({ batched(s) { printErr(s); } });
+
+    // Inject word list before running any Python
+    py.globals.set('WORDS', py.toPy(WORDS));
+
+    // Define all functions
+    try {
+      await py.runPythonAsync(PY);
+    } catch (e) {
+      printErr('Python init error: ' + e.message);
+      setStatus('error', 'Python error');
+      loaderEl.style.display = 'none';
+      console.error(e);
+      return;
+    }
+
+    // Kick off first game
+    try {
+      await py.runPythonAsync('start_game()');
+      flushBuf();
+    } catch (e) {
+      printErr('start_game() error: ' + e.message);
+      console.error(e);
+    }
+
+    loaderEl.style.display = 'none';
+    inputEl.disabled = false;
+    btnEl.disabled   = false;
+    inputEl.focus();
+    setStatus('ready', 'Python running · Pyodide 0.25.1');
+  }
+
+  // ── submit guess ──────────────────────────────────────────────────────────────
+  async function submit() {
+    const raw = inputEl.value.trim().toLowerCase();
+    if (!raw || !py) return;
+    inputEl.value = '';
+
+    printLine(`  › ${raw.toUpperCase()}\n`);
+    inputEl.disabled = true;
+    btnEl.disabled   = true;
+    setStatus('busy', 'Running…');
+
+    try {
+      const cmd = raw === 'new'
+              ? 'start_game()'
+              : `submit_guess(${JSON.stringify(raw)})`;
+      await py.runPythonAsync(cmd);
+      flushBuf();
+    } catch (e) {
+      printErr('Error: ' + e.message);
+      console.error(e);
+    }
+
+    const over = py.globals.get('game_over');
+    inputEl.disabled = false;
+    btnEl.disabled   = false;
+    inputEl.focus();
+    setStatus('ready', over ? 'Game over — type "new" to restart' : 'Python running · Pyodide 0.25.1');
+  }
+
+  btnEl.addEventListener('click', submit);
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+
+  init();
+</script>
+</body>
+</html>
